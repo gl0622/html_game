@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>無限跑酷 - Endless Parkour</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{
+    min-height:100vh;
+    display:flex;align-items:center;justify-content:center;
+    background: radial-gradient(1200px 600px at 50% 20%, #a8d8ff 0%, #6fa8ff 30%, #2a3a6b 85%, #0f1220 100%);
+    font-family: "Segoe UI", "Microsoft JhengHei", system-ui, sans-serif;
+    color:#fff;
+    overflow:hidden;
+  }
+  .wrap{
+    display:flex;flex-direction:column;align-items:center;gap:14px;
+    padding:20px;
+  }
+  h1{
+    font-size:18px;letter-spacing:0.2em;font-weight:800;
+    text-transform:uppercase;color:#fff;
+    text-shadow:0 2px 12px rgba(0,0,0,.4);
+    opacity:.9;
+  }
+  h1 span{color:#ffd84d}
+  .frame{
+    position:relative;
+    border-radius:18px;
+    padding:10px;
+    background:linear-gradient(180deg, rgba(255,255,255,.18), rgba(255,255,255,.06));
+    box-shadow:0 20px 60px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.3);
+    backdrop-filter: blur(6px);
+  }
+  canvas{
+    display:block;
+    width:800px;height:400px;
+    border-radius:12px;
+    background:#87ceeb;
+    box-shadow:inset 0 0 0 1px rgba(255,255,255,.25), 0 8px 30px rgba(0,0,0,.3);
+    cursor:pointer;
+  }
+  .hud{
+    position:absolute;left:20px;right:20px;top:18px;
+    display:flex;justify-content:space-between;align-items:flex-start;
+    pointer-events:none;
+    font-weight:800;
+  }
+  .hud-left, .hud-right{ display:flex; gap:10px; }
+  .badge{
+    background:rgba(0,0,0,.38);
+    border:1px solid rgba(255,255,255,.18);
+    backdrop-filter: blur(8px);
+    padding:7px 12px;border-radius:999px;
+    font-size:13px;letter-spacing:.04em;
+    display:flex;align-items:center;gap:6px;
+    box-shadow:0 4px 16px rgba(0,0,0,.25);
+  }
+  .badge b{font-size:16px;color:#ffd84d}
+  .badge small{opacity:.75;font-weight:600}
+  .controls{
+    font-size:12px;color:rgba(255,255,255,.85);
+    text-align:center;line-height:1.6;
+    background:rgba(0,0,0,.25);
+    padding:8px 16px;border-radius:999px;
+    border:1px solid rgba(255,255,255,.12);
+  }
+  .controls kbd{
+    background:#fff;color:#1a1d2e;
+    padding:1px 6px;border-radius:4px;font-weight:800;
+    box-shadow:0 2px 0 #bbb;font-size:11px;
+  }
+  /* game over overlay */
+  .overlay{
+    position:absolute;inset:10px;
+    border-radius:12px;
+    background: rgba(10,14,30,.68);
+    backdrop-filter: blur(6px);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    text-align:center;
+    opacity:0;pointer-events:none;
+    transition: opacity .3s ease;
+  }
+  .overlay.show{opacity:1;pointer-events:auto}
+  .overlay h2{
+    font-size:42px;font-weight:900;letter-spacing:.08em;
+    text-shadow:0 4px 20px rgba(0,0,0,.5);
+    margin-bottom:6px;
+  }
+  .overlay h2 span{color:#ff4d6a}
+  .overlay p{opacity:.85;font-size:14px;margin-bottom:18px}
+  .score-big{font-size:20px;font-weight:800;margin-bottom:4px}
+  .score-big b{color:#ffd84d;font-size:28px}
+  .btn{
+    margin-top:10px;
+    background:linear-gradient(180deg,#ffd84d,#ffb700);
+    color:#1a1200;
+    border:none;
+    padding:12px 28px;border-radius:999px;
+    font-weight:900;font-size:15px;letter-spacing:.06em;
+    cursor:pointer;
+    box-shadow:0 6px 20px rgba(255,184,0,.45), 0 2px 0 #c68a00;
+    transition: transform .08s;
+  }
+  .btn:active{transform:scale(.96)}
+  .btn:hover{filter:brightness(1.05)}
+  .tip{margin-top:12px;font-size:11px;opacity:.6}
+  @media (max-width:860px){
+    canvas{width:92vw;height:46vw;max-height:400px}
+    .frame{padding:6px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>⚡ ENDLESS <span>PARKOUR</span> — 無限跑酷</h1>
+  <div class="frame" id="frame">
+    <canvas id="game" width="800" height="400"></canvas>
+    <div class="hud">
+      <div class="hud-left">
+        <div class="badge">🏃 分數 <b id="scoreEl">0</b></div>
+        <div class="badge">💰 金幣 <b id="coinEl">0</b></div>
+      </div>
+      <div class="hud-right">
+        <div class="badge"><small>最高</small> <b id="bestEl">0</b> <small>👑</small></div>
+      </div>
+    </div>
+    <div class="overlay" id="overlay">
+      <h2>GAME <span>OVER</span></h2>
+      <p>撞到障礙物了！</p>
+      <div class="score-big">本次分數 <b id="finalScore">0</b></div>
+      <div class="score-big" style="font-size:14px;opacity:.8">最高分 <b id="finalBest" style="font-size:18px">0</b></div>
+      <button class="btn" id="restartBtn">↻ 按 R 重新開始</button>
+      <div class="tip">點擊畫面 / 空白鍵 / ↑ 也能重新開始</div>
+    </div>
+  </div>
+  <div class="controls">
+    <kbd>空白</kbd> / <kbd>↑</kbd> / <kbd>點擊</kbd> 跳躍（可二段跳）&nbsp;·&nbsp; <kbd>R</kbd> 重新開始 &nbsp;·&nbsp; 長按可連跳
+  </div>
+</div>
+
+<script>
+/* ===================== 設定參數 ===================== */
+const W = 800, H = 400;
+const GROUND_Y = H - 56;           // 地面 y
+const GRAVITY = 0.62;              // 重力
+const JUMP_VELOCITY = -12.8;       // 第一段跳
+const DOUBLE_JUMP_VELOCITY = -11.2;// 二段跳（稍弱）
+const BASE_SPEED = 5.2;            // 初始速度
+const MAX_SPEED = 13.5;
+const SPEED_ACCEL = 0.0016;        // 每幀加速
+
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const scoreEl = document.getElementById('scoreEl');
+const coinEl = document.getElementById('coinEl');
+const bestEl = document.getElementById('bestEl');
+const overlay = document.getElementById('overlay');
+const finalScoreEl = document.getElementById('finalScore');
+const finalBestEl = document.getElementById('finalBest');
+const restartBtn = document.getElementById('restartBtn');
+
+/* ===================== 狀態 ===================== */
+let speed = BASE_SPEED;
+let score = 0;
+let coinsCollected = 0;
+let best = parseInt(localStorage.getItem('parkour_best') || '0', 10);
+bestEl.textContent = best;
+
+let frameCount = 0;
+let gameOver = false;
+let shake = 0;
+
+// 玩家
+const player = {
+  x: 96, y: GROUND_Y - 36, w: 32, h: 36,
+  vy: 0,
+  jumpCount: 0,
+  maxJumps: 2,
+  onGround: true,
+  anim: 0 // 跑步動畫相位
+};
+
+// 障礙物 & 金幣
+let obstacles = [];
+let coins = [];
+let particles = [];
+let obstacleTimer = 0;
+let nextObstacleIn = 90;
+
+// 背景視差元素
+const clouds = Array.from({length:6}, (_,i)=>({
+  x: Math.random()*W, y: 30+Math.random()*80, w: 60+Math.random()*80, h: 18+Math.random()*14,
+  speed: 0.4+Math.random()*0.7, alpha: 0.6+Math.random()*0.4
+}));
+const mountains = [
+  {color:'#2a4a7a', y: 220, amp: 80, speed: 0.6, step: 180},
+  {color:'#1e355e', y: 240, amp: 60, speed: 1.1, step: 140},
+];
+let groundOffset = 0;
+
+/* ===================== 音效（Web Audio） ===================== */
+let audioCtx = null;
+function ensureAudio(){ if(!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)(); if(audioCtx.state==='suspended') audioCtx.resume(); }
+function tone(freq, duration, type='sine', volume=0.25, slideTo){
+  if(!audioCtx) return;
+  const o = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  o.type = type; o.frequency.value = freq;
+  o.connect(g); g.connect(audioCtx.destination);
+  g.gain.value = volume;
+  g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+  if(slideTo){ o.frequency.exponentialRampToValueAtTime(slideTo, audioCtx.currentTime + duration*0.6); }
+  o.start(); o.stop(audioCtx.currentTime + duration);
+}
+function sfxJump(){ ensureAudio(); tone(520,0.16,'sine',0.3,880); }
+function sfxDouble(){ ensureAudio(); tone(700,0.14,'sine',0.28,1050); }
+function sfxCoin(){ ensureAudio(); tone(880,0.12,'sine',0.3); setTimeout(()=>tone(1100,0.18,'sine',0.25),90); }
+function sfxHit(){ ensureAudio(); tone(180,0.3,'square',0.22,60); tone(90,0.35,'sawtooth',0.15); }
+
+/* ===================== 工具 ===================== */
+function rand(min,max){ return Math.random()*(max-min)+min; }
+function aabb(a,b){
+  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+}
+
+/* ===================== 輸入 ===================== */
+const keys = {};
+window.addEventListener('keydown', e=>{
+  if(e.code==='Space' || e.code==='ArrowUp'){ e.preventDefault(); doJump(); }
+  if(e.code==='KeyR' && gameOver) reset();
+  keys[e.code]=true;
+});
+window.addEventListener('keyup', e=> keys[e.code]=false);
+
+// 滑鼠 / 觸控
+canvas.addEventListener('pointerdown', e=>{
+  e.preventDefault();
+  ensureAudio();
+  if(gameOver) { reset(); return; }
+  doJump();
+});
+restartBtn.addEventListener('click', reset);
+overlay.addEventListener('click', ()=>{ if(gameOver) reset(); });
+
+function doJump(){
+  if(gameOver) return;
+  // 地面或空中皆可，只要還有跳躍次數
+  if(player.jumpCount < player.maxJumps){
+    if(player.onGround || player.jumpCount===0){
+      player.vy = JUMP_VELOCITY;
+      sfxJump();
+    } else {
+      player.vy = DOUBLE_JUMP_VELOCITY;
+      sfxDouble();
+      spawnParticles(player.x+player.w/2, player.y+player.h, 8, '#7af0ff');
+    }
+    player.jumpCount++;
+    player.onGround = false;
+  }
+}
+
+/* ===================== 生成 ===================== */
+function spawnObstacle(){
+  // 隨機寬高，顏色多元
+  const w = rand(28, 52);
+  const h = rand(32, 58);
+  const y = GROUND_Y - h;
+  const type = Math.random()<0.15 ? 'tall' : 'normal';
+  const colors = ['#ff5a5a','#ff8a3d','#ffd23d','#6bff8a','#5ab6ff','#c27aff'];
+  const color = colors[Math.floor(Math.random()*colors.length)];
+  obstacles.push({x:W+10, y, w, h, color, type});
+
+  // 40% 機率在障礙物附近生成金幣
+  if(Math.random()<0.55){
+    // 在障礙物上方或間隙處
+    const cy = Math.random()<0.5 ? y - 46 : y - 20;
+    const cx = W + 10 + w + rand(10,30);
+    spawnCoin(cx, cy);
+  }
+}
+function spawnCoin(x,y){
+  coins.push({x, y, w:18, h:18, taken:false, phase:Math.random()*Math.PI*2});
+}
+function spawnParticles(x,y,count,color){
+  for(let i=0;i<count;i++){
+    particles.push({
+      x, y,
+      vx: rand(-4,4), vy: rand(-6,-1),
+      r: rand(2,5), life: 1, decay: rand(0.04,0.08),
+      color: color || '#ffd84d'
+    });
+  }
+}
+
+/* ===================== 重置 ===================== */
+function reset(){
+  obstacles=[]; coins=[]; particles=[];
+  score=0; coinsCollected=0; speed=BASE_SPEED;
+  frameCount=0; obstacleTimer=0; nextObstacleIn=90;
+  groundOffset=0; shake=0; gameOver=false;
+  player.y = GROUND_Y - player.h; player.vy=0; player.jumpCount=0; player.onGround=true;
+  overlay.classList.remove('show');
+}
+
+/* ===================== 更新邏輯 ===================== */
+function update(){
+  if(gameOver){
+    if(shake>0) shake*=0.85;
+    return;
+  }
+  frameCount++;
+  // 速度漸增
+  if(speed < MAX_SPEED) speed += SPEED_ACCEL;
+
+  // 分數：依速度累加 + 時間
+  score += speed * 0.28;
+  const displayScore = Math.floor(score + coinsCollected*10);
+  scoreEl.textContent = displayScore;
+  coinEl.textContent = coinsCollected;
+
+  // 更新雲 & 地面偏移
+  clouds.forEach(c=>{
+    c.x -= c.speed * (0.6 + speed/BASE_SPEED*0.3);
+    if(c.x + c.w < -20) { c.x = W + rand(20,120); c.y = 30+Math.random()*80; }
+  });
+  groundOffset = (groundOffset + speed) % 40;
+
+  // 玩家物理
+  player.vy += GRAVITY;
+  player.y += player.vy;
+
+  // 落地檢測
+  if(player.y + player.h >= GROUND_Y){
+    player.y = GROUND_Y - player.h;
+    if(player.vy > 0) {
+      // 落地粒子
+      if(Math.abs(player.vy) > 6) spawnParticles(player.x+player.w/2, GROUND_Y, 5, '#ffffff');
+      player.vy = 0;
+    }
+    player.onGround = true;
+    player.jumpCount = 0;
+  } else {
+    player.onGround = false;
+  }
+  player.anim += 0.32 + speed*0.02;
+
+  // 障礙生成計時
+  obstacleTimer++;
+  if(obstacleTimer >= nextObstacleIn){
+    spawnObstacle();
+    obstacleTimer=0;
+    // 間距隨速度縮短，但有下限
+    const base = Math.max(58, 130 - (speed-BASE_SPEED)*10);
+    nextObstacleIn = rand(base, base+55);
+    // 偶爾連續兩個
+    if(Math.random()<0.18) nextObstacleIn = Math.max(35, base*0.45);
+  }
+
+  // 隨機額外金幣（空中）
+  if(frameCount % 70===0 && Math.random()<0.35){
+    spawnCoin(W+20, rand(GROUND_Y-90, GROUND_Y-30));
+  }
+
+  // 移動障礙物
+  for(let i=obstacles.length-1;i>=0;i--){
+    const o = obstacles[i];
+    o.x -= speed;
+    if(o.x + o.w < -20) obstacles.splice(i,1);
+    else if(aabb(player,o)){
+      // 碰撞 -> 遊戲結束
+      gameOver = true;
+      shake = 12;
+      sfxHit();
+      spawnParticles(player.x+player.w/2, player.y+player.h/2, 16, o.color);
+      // 更新最高分
+      const finalS = Math.floor(score + coinsCollected*10);
+      if(finalS > best){ best = finalS; localStorage.setItem('parkour_best', best); }
+      bestEl.textContent = best;
+      finalScoreEl.textContent = finalS;
+      finalBestEl.textContent = best;
+      overlay.classList.add('show');
+    }
+  }
+
+  // 移動金幣 & 檢測吃幣
+  for(let i=coins.length-1;i>=0;i--){
+    const c = coins[i];
+    c.x -= speed * 0.98;
+    c.phase += 0.16;
+    // 浮動
+    c.y += Math.sin(c.phase)*0.3;
+    if(c.x + c.w < -20) coins.splice(i,1);
+    else if(!c.taken && aabb(player,{x:c.x-4,y:c.y-4,w:c.w+8,h:c.h+8})){
+      c.taken = true;
+      coinsCollected++;
+      sfxCoin();
+      spawnParticles(c.x+c.w/2, c.y+c.h/2, 10, '#ffd84d');
+      coins.splice(i,1);
+      // 小加速回饋
+      score += 10;
+    }
+  }
+
+  // 粒子更新
+  for(let i=particles.length-1;i>=0;i--){
+    const p = particles[i];
+    p.x += p.vx; p.y += p.vy; p.vy += 0.28; p.life -= p.decay;
+    if(p.life<=0) particles.splice(i,1);
+  }
+}
+
+/* ===================== 繪製 ===================== */
+function draw(){
+  ctx.save();
+  if(shake>0.5){
+    ctx.translate(rand(-shake,shake), rand(-shake*0.5,shake*0.5));
+  }
+
+  // 天空漸層
+  const g = ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0, '#87d0ff');
+  g.addColorStop(0.45, '#a3dcff');
+  g.addColorStop(0.72, '#cde8ff');
+  g.addColorStop(1, '#ffe9b0');
+  ctx.fillStyle = g;
+  ctx.fillRect(0,0,W,H);
+
+  // 遠山視差
+  mountains.forEach((m,idx)=>{
+    ctx.fillStyle = m.color;
+    ctx.globalAlpha = idx===0?0.85:1;
+    ctx.beginPath();
+    ctx.moveTo(0, m.y);
+    const off = (frameCount * m.speed) % m.step;
+    for(let x=-m.step; x<W+m.step; x+=m.step){
+      const peak = m.y - m.amp;
+      ctx.lineTo(x - off + m.step*0.3, peak);
+      ctx.lineTo(x - off + m.step*0.7, m.y);
+    }
+    ctx.lineTo(W, H); ctx.lineTo(0,H); ctx.closePath(); ctx.fill();
+  });
+  ctx.globalAlpha=1;
+
+  // 雲朵
+  clouds.forEach(c=>{
+    ctx.fillStyle = `rgba(255,255,255,${c.alpha})`;
+    ctx.beginPath();
+    // 三圓組合雲朵
+    ctx.ellipse(c.x, c.y, c.w*0.38, c.h*0.7, 0,0,Math.PI*2);
+    ctx.ellipse(c.x + c.w*0.25, c.y-6, c.w*0.30, c.h*0.85, 0,0,Math.PI*2);
+    ctx.ellipse(c.x - c.w*0.22, c.y-3, c.w*0.28, c.h*0.6, 0,0,Math.PI*2);
+    ctx.fill();
+    // 陰影
+    ctx.fillStyle='rgba(0,0,0,0.06)';
+    ctx.ellipse(c.x, c.y+6, c.w*0.42, c.h*0.28, 0,0,Math.PI*2); ctx.fill();
+  });
+
+  // 地面
+  ctx.fillStyle = '#2a2f45';
+  ctx.fillRect(0, GROUND_Y, W, H-GROUND_Y);
+  // 草皮
+  ctx.fillStyle = '#3dd68a';
+  ctx.fillRect(0, GROUND_Y, W, 10);
+  ctx.fillStyle = '#2ec47a';
+  ctx.fillRect(0, GROUND_Y+10, W, 4);
+  // 跑道紋理（滾動）
+  ctx.strokeStyle='rgba(255,255,255,0.12)';
+  ctx.lineWidth=1;
+  for(let x= -40 + (40 - groundOffset); x<W; x+=40){
+    ctx.beginPath(); ctx.moveTo(x, GROUND_Y+22); ctx.lineTo(x+18, GROUND_Y+22); ctx.stroke();
+  }
+  // 地面高光線
+  ctx.fillStyle='rgba(255,255,255,0.08)';
+  ctx.fillRect(0,GROUND_Y, W,1);
+
+  // 障礙物
+  obstacles.forEach(o=>{
+    // 陰影
+    ctx.fillStyle='rgba(0,0,0,0.22)';
+    ctx.beginPath(); ctx.ellipse(o.x+o.w/2, GROUND_Y+2, o.w*0.45, 6,0,0,Math.PI*2); ctx.fill();
+    // 本體
+    ctx.fillStyle = o.color;
+    // 圓角障礙
+    const r=6;
+    ctx.beginPath();
+    ctx.roundRect(o.x, o.y, o.w, o.h, r); ctx.fill();
+    // 高光
+    ctx.fillStyle='rgba(255,255,255,0.28)';
+    ctx.fillRect(o.x+3, o.y+3, 6, o.h-6);
+    // 頂部條紋（警示）
+    if(o.h>40){
+      ctx.fillStyle='rgba(0,0,0,0.18)';
+      for(let yy=o.y+10; yy<o.y+o.h-10; yy+=10){
+        ctx.fillRect(o.x, yy, o.w, 4);
+      }
+    }
+    // 邊框
+    ctx.strokeStyle='rgba(0,0,0,0.18)'; ctx.lineWidth=2;
+    ctx.strokeRect(o.x, o.y, o.w, o.h);
+  });
+
+  // 金幣
+  coins.forEach(c=>{
+    // 陰影
+    ctx.fillStyle='rgba(0,0,0,0.18)';
+    ctx.beginPath(); ctx.ellipse(c.x+9, GROUND_Y+2, 10,4,0,0,Math.PI*2); ctx.fill();
+
+    const cx=c.x+9, cy=c.y+9;
+    const bob = Math.sin(c.phase)*2;
+    // 外圈
+    ctx.save(); ctx.translate(cx, cy+bob);
+    // 旋轉閃光
+    const rot = c.phase*0.22;
+    ctx.rotate(rot);
+    ctx.fillStyle='#ffb700'; ctx.strokeStyle='#fff8c2'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.ellipse(0,0,9,9,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle='#ffea7a'; ctx.beginPath(); ctx.ellipse(0,0,6,6,0,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#c68a00'; ctx.font='bold 10px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('$',0,0.5);
+    // 閃光點
+    ctx.fillStyle='rgba(255,255,255,0.9)';
+    ctx.beginPath(); ctx.arc(-3,-3,1.8,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+  });
+
+  // 玩家陰影
+  const shadowW = player.onGround ? 22 : 14 - Math.min(6, (GROUND_Y - (player.y+player.h))/20);
+  ctx.fillStyle='rgba(0,0,0,0.25)';
+  ctx.beginPath(); ctx.ellipse(player.x+player.w/2, GROUND_Y+2, shadowW, 5,0,0,Math.PI*2); ctx.fill();
+
+  // 玩家角色（含跑步動畫）
+  drawPlayer();
+
+  // 粒子
+  particles.forEach(p=>{
+    ctx.globalAlpha = Math.max(0,p.life);
+    ctx.fillStyle = p.color;
+    ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill();
+  });
+  ctx.globalAlpha=1;
+
+  // 速度線（高速時）
+  if(speed > 9){
+    ctx.strokeStyle='rgba(255,255,255,0.18)';
+    ctx.lineWidth=2;
+    const cnt = Math.floor((speed-9)*2);
+    for(let i=0;i<cnt;i++){
+      const x = rand(0,W), y=rand(50,GROUND_Y-20);
+      ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x - speed*1.2, y); ctx.stroke();
+    }
+  }
+
+  ctx.restore();
+
+  // 頂部 vignette
+  ctx.fillStyle='rgba(0,0,0,0.05)';
+  ctx.fillRect(0,0,W,22);
+}
+
+function drawPlayer(){
+  const {x,y,w,h} = player;
+  const legSwing = Math.sin(player.anim) * (player.onGround ? 7 : 2);
+  const bob = player.onGround ? Math.abs(Math.sin(player.anim*1.8))*2 : 0;
+
+  // 身體
+  ctx.save();
+  // 受傷閃爍
+  if(gameOver && Math.floor(frameCount/4)%2===0) ctx.globalAlpha=0.6;
+
+  // 鞋子/腿部
+  ctx.fillStyle='#1a1d2e';
+  // 左腿
+  ctx.fillRect(x+6 + (player.onGround? legSwing*0.5:0), y+h-6 + bob, 8, 6);
+  // 右腿
+  ctx.fillRect(x+18 + (player.onGround? -legSwing*0.5:0), y+h-6 + bob, 8, 6);
+
+  // 身體主塊
+  ctx.fillStyle = '#ffffff';
+  // 圓角身體
+  ctx.beginPath(); ctx.roundRect(x, y + bob, w, h-6, 7); ctx.fill();
+  // 邊框
+  ctx.strokeStyle='rgba(0,0,0,0.14)'; ctx.lineWidth=2; ctx.stroke();
+
+  // 衣服條紋
+  ctx.fillStyle='#ffd84d';
+  ctx.fillRect(x+4, y+12+ bob, w-8, 6);
+  ctx.fillStyle='#ff5a5a';
+  ctx.fillRect(x+4, y+19+ bob, w-8, 3);
+
+  // 臉 / 眼睛
+  ctx.fillStyle='#1a1d2e';
+  // 眼睛
+  const eyeY = y+8 + bob;
+  if(player.vy < -2){
+    // 跳躍時眼睛向上看
+    ctx.beginPath(); ctx.arc(x+10, eyeY, 3,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(x+22, eyeY, 3,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(x+11, eyeY-1,1.1,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(x+23, eyeY-1,1.1,0,Math.PI*2); ctx.fill();
+  } else {
+    ctx.fillRect(x+8, eyeY, 6,4);
+    ctx.fillRect(x+18, eyeY, 6,4);
+    ctx.fillStyle='#fff'; ctx.fillRect(x+10, eyeY+1,2,1.5); ctx.fillRect(x+20, eyeY+1,2,1.5);
+  }
+  // 微笑/表情
+  ctx.strokeStyle='#1a1d2e'; ctx.lineWidth=1.5; ctx.lineCap='round';
+  if(gameOver){
+    ctx.beginPath(); ctx.moveTo(x+10, y+18+bob); ctx.lineTo(x+14, y+16+bob); ctx.moveTo(x+18, y+16+bob); ctx.lineTo(x+22, y+18+bob); ctx.stroke();
+  } else {
+    ctx.beginPath(); ctx.arc(x+16, y+18+bob, 4, 0.15*Math.PI, 0.85*Math.PI); ctx.stroke();
+  }
+
+  // 二段跳指示（腳下光環）
+  if(!player.onGround && player.jumpCount===1){
+    ctx.fillStyle='rgba(122,240,255,0.5)';
+    ctx.beginPath(); ctx.ellipse(x+w/2, y+h+4, 10, 3,0,0,Math.PI*2); ctx.fill();
+  }
+
+  // 頭頂速度感
+  if(!player.onGround){
+    ctx.fillStyle='rgba(255,255,255,0.7)';
+    for(let i=0;i<2;i++){
+      ctx.fillRect(x - 10 - i*8, y+6 + i*6, 8, 2);
+    }
+  }
+
+  ctx.restore();
+}
+
+/* ===================== 主迴圈 ===================== */
+function loop(){
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+/* ===================== 處理離開頁面時保存 ===================== */
+window.addEventListener('blur', ()=>{ keys['Space']=false; });
+
+// 初始提示：點擊啟用音訊
+canvas.addEventListener('pointerenter', ensureAudio, {once:true});
+</script>
+</body>
+</html>
